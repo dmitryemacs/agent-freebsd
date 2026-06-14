@@ -81,14 +81,19 @@ struct OpenAIResponseMessage {
 
 impl OpenAIProvider {
     pub fn new(cfg: &LlmConfig) -> Result<Self> {
+        Self::with_defaults(cfg, "OPENAI_API_KEY", "https://api.openai.com/v1")
+    }
+
+    pub fn with_defaults(cfg: &LlmConfig, env_key: &str, default_url: &str) -> Result<Self> {
         let api_key = cfg.api_key.clone()
+            .or_else(|| std::env::var(env_key).ok())
             .or_else(|| std::env::var("OPENAI_API_KEY").ok())
-            .ok_or_else(|| anyhow::anyhow!("OPENAI_API_KEY required"))?;
+            .ok_or_else(|| anyhow::anyhow!("{} required", env_key))?;
 
         Ok(Self {
             api_key,
             api_url: cfg.api_url.clone()
-                .unwrap_or_else(|| "https://api.openai.com/v1".to_string()),
+                .unwrap_or_else(|| default_url.to_string()),
             model: cfg.model.clone(),
             max_tokens: cfg.max_tokens,
             temperature: cfg.temperature,
