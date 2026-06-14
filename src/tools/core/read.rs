@@ -59,3 +59,75 @@ impl Tool for ReadTool {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tools::Tool;
+
+    #[tokio::test]
+    async fn test_read_missing_path() {
+        let tool = ReadTool;
+        let result = tool.execute(serde_json::json!({})).await;
+        assert!(!result.success);
+        assert_eq!(result.error.unwrap(), "path is required");
+    }
+
+    #[tokio::test]
+    async fn test_read_nonexistent_file() {
+        let tool = ReadTool;
+        let result = tool.execute(serde_json::json!({"path": "/tmp/nonexistent-file-12345"}))
+            .await;
+        assert!(!result.success);
+        assert!(result.error.unwrap().contains("Failed to read file"));
+    }
+
+    #[tokio::test]
+    async fn test_read_success() {
+        let tmp = std::env::temp_dir().join("aibsd_test_read.txt");
+        std::fs::write(&tmp, "line1\nline2\nline3\n").unwrap();
+
+        let tool = ReadTool;
+        let result = tool.execute(serde_json::json!({"path": tmp.to_str().unwrap()})).await;
+        assert!(result.success);
+        assert_eq!(result.output, "1:line1\n2:line2\n3:line3");
+
+        let _ = std::fs::remove_file(&tmp);
+    }
+
+    #[tokio::test]
+    async fn test_read_with_offset() {
+        let tmp = std::env::temp_dir().join("aibsd_test_read_offset.txt");
+        std::fs::write(&tmp, "a\nb\nc\nd\ne\n").unwrap();
+
+        let tool = ReadTool;
+        let result = tool.execute(serde_json::json!({"path": tmp.to_str().unwrap(), "offset": 3}))
+            .await;
+        assert!(result.success);
+        assert_eq!(result.output, "3:c\n4:d\n5:e");
+
+        let _ = std::fs::remove_file(&tmp);
+    }
+
+    #[tokio::test]
+    async fn test_read_with_limit() {
+        let tmp = std::env::temp_dir().join("aibsd_test_read_limit.txt");
+        std::fs::write(&tmp, "1\n2\n3\n4\n5\n").unwrap();
+
+        let tool = ReadTool;
+        let result = tool.execute(serde_json::json!({"path": tmp.to_str().unwrap(), "offset": 1, "limit": 2}))
+            .await;
+        assert!(result.success);
+        assert_eq!(result.output, "1:1\n2:2");
+
+        let _ = std::fs::remove_file(&tmp);
+    }
+
+    #[test]
+    fn test_read_input_schema() {
+        let tool = ReadTool;
+        let schema = tool.input_schema();
+        assert_eq!(schema["type"], "object");
+        assert!(schema["required"].as_array().unwrap().iter().any(|v| v == "path"));
+    }
+}

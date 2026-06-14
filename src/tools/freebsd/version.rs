@@ -148,3 +148,34 @@ impl VersionTool {
         ))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tools::Tool;
+
+    #[tokio::test]
+    async fn test_non_freebsd_returns_mock() {
+        let tool = VersionTool;
+        let result = tool.execute(serde_json::json!({})).await;
+        assert!(result.success);
+        assert!(result.output.contains("not FreeBSD"));
+    }
+
+    #[tokio::test]
+    async fn test_version_unknown_detail() {
+        let tool = VersionTool;
+        let result = tool.execute(serde_json::json!({"detail": "bogus"})).await;
+        if cfg!(target_os = "freebsd") {
+            assert!(!result.success);
+            assert!(result.error.unwrap().contains("Unknown detail"));
+        }
+    }
+
+    #[test]
+    fn test_version_input_schema() {
+        let tool = VersionTool;
+        let schema = tool.input_schema();
+        assert!(schema.get("properties").is_some());
+    }
+}

@@ -119,3 +119,33 @@ impl ServiceTool {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_non_freebsd_guard() {
+        let tool = ServiceTool;
+        let result = tool.execute(serde_json::json!({"action": "list"})).await;
+        assert!(!result.success);
+        assert!(result.error.unwrap().contains("only works on FreeBSD"));
+    }
+
+    #[tokio::test]
+    async fn test_service_unknown_action() {
+        let tool = ServiceTool;
+        let result = tool.execute(serde_json::json!({"action": "bogus"})).await;
+        assert!(!result.success);
+        if cfg!(target_os = "freebsd") {
+            assert!(result.error.unwrap().contains("Unknown action"));
+        }
+    }
+
+    #[test]
+    fn test_service_input_schema() {
+        let tool = ServiceTool;
+        let schema = tool.input_schema();
+        assert!(schema["required"].as_array().unwrap().iter().any(|v| v == "action"));
+    }
+}

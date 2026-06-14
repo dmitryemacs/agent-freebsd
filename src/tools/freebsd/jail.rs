@@ -210,3 +210,48 @@ impl JailTool {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tools::Tool;
+
+    #[tokio::test]
+    async fn test_non_freebsd_guard_list() {
+        let tool = JailTool;
+        let result = tool.execute(serde_json::json!({"action": "list"})).await;
+        assert!(!result.success);
+        assert_eq!(result.error.unwrap(), "this tool only works on FreeBSD");
+    }
+
+    #[tokio::test]
+    async fn test_non_freebsd_guard_info() {
+        let tool = JailTool;
+        let result = tool.execute(serde_json::json!({"action": "info", "name": "test"})).await;
+        assert!(!result.success);
+        assert_eq!(result.error.unwrap(), "this tool only works on FreeBSD");
+    }
+
+    #[tokio::test]
+    async fn test_non_freebsd_guard_exec() {
+        let tool = JailTool;
+        let result = tool.execute(serde_json::json!({"action": "exec", "name": "test", "command": "ls"})).await;
+        assert!(!result.success);
+        assert_eq!(result.error.unwrap(), "this tool only works on FreeBSD");
+    }
+
+    #[tokio::test]
+    async fn test_jail_unknown_action() {
+        let tool = JailTool;
+        let result = tool.execute(serde_json::json!({"action": "bogus"})).await;
+        assert!(!result.success);
+        assert!(result.error.unwrap().contains("Unknown action"));
+    }
+
+    #[test]
+    fn test_jail_input_schema() {
+        let tool = JailTool;
+        let schema = tool.input_schema();
+        assert!(schema["required"].as_array().unwrap().iter().any(|v| v == "action"));
+    }
+}

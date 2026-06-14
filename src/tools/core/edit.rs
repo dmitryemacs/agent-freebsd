@@ -60,3 +60,75 @@ impl Tool for EditTool {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tools::Tool;
+
+    #[tokio::test]
+    async fn test_edit_missing_params() {
+        let tool = EditTool;
+        let result = tool.execute(serde_json::json!({})).await;
+        assert!(!result.success);
+
+        let result2 = tool.execute(serde_json::json!({"file_path": "/tmp/x"})).await;
+        assert!(!result2.success);
+    }
+
+    #[tokio::test]
+    async fn test_edit_nonexistent_file() {
+        let tool = EditTool;
+        let result = tool.execute(serde_json::json!({
+            "file_path": "/tmp/nonexistent-edit-12345",
+            "old_string": "foo",
+            "new_string": "bar"
+        })).await;
+        assert!(!result.success);
+        assert!(result.error.unwrap().contains("Failed to read file"));
+    }
+
+    #[tokio::test]
+    async fn test_edit_old_string_not_found() {
+        let tmp = std::env::temp_dir().join("aibsd_test_edit_nomatch.txt");
+        std::fs::write(&tmp, "hello world").unwrap();
+
+        let tool = EditTool;
+        let result = tool.execute(serde_json::json!({
+            "file_path": tmp.to_str().unwrap(),
+            "old_string": "zzz",
+            "new_string": "aaa"
+        })).await;
+        assert!(!result.success);
+        assert_eq!(result.error.unwrap(), "old_string not found in file");
+
+        let _ = std::fs::remove_file(&tmp);
+    }
+
+    #[tokio::test]
+    async fn test_edit_success() {
+        let tmp = std::env::temp_dir().join("aibsd_test_edit_ok.txt");
+        std::fs::write(&tmp, "hello world foo").unwrap();
+
+        let tool = EditTool;
+        let result = tool.execute(serde_json::json!({
+            "file_path": tmp.to_str().unwrap(),
+            "old_string": "foo",
+            "new_string": "bar"
+        })).await;
+        assert!(result.success);
+
+        let content = std::fs::read_to_string(&tmp).unwrap();
+        assert_eq!(content, "hello world bar");
+
+        let _ = std::fs::remove_file(&tmp);
+    }
+
+    #[test]
+    fn test_edit_input_schema() {
+        let tool = EditTool;
+        let schema = tool.input_schema();
+        assert!(schema["required"].as_array().unwrap().iter().any(|v| v == "file_path"));
+        assert!(schema["required"].as_array().unwrap().iter().any(|v| v == "old_string"));
+    }
+}

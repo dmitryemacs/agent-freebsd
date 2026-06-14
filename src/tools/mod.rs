@@ -46,3 +46,74 @@ pub trait Tool: Send + Sync {
     fn input_schema(&self) -> serde_json::Value;
     async fn execute(&self, args: serde_json::Value) -> ToolOutput;
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_tool_output_ok() {
+        let out = ToolOutput::ok("success");
+        assert_eq!(out.success, true);
+        assert_eq!(out.output, "success");
+        assert_eq!(out.error, None);
+    }
+
+    #[test]
+    fn test_tool_output_err() {
+        let out = ToolOutput::err("something failed");
+        assert_eq!(out.success, false);
+        assert_eq!(out.output, "");
+        assert_eq!(out.error, Some("something failed".to_string()));
+    }
+
+    #[test]
+    fn test_tool_output_display_ok() {
+        let out = ToolOutput::ok("hello");
+        assert_eq!(out.to_string(), "hello");
+    }
+
+    #[test]
+    fn test_tool_output_display_err() {
+        let out = ToolOutput::err("fail");
+        assert_eq!(out.to_string(), "Error: fail");
+    }
+
+    #[test]
+    fn test_tool_output_ok_empty() {
+        let out = ToolOutput::ok("");
+        assert!(out.success);
+        assert_eq!(out.output, "");
+    }
+
+    #[test]
+    fn test_tool_output_into_string() {
+        let out = ToolOutput::ok(String::from("test"));
+        assert_eq!(out.output, "test");
+    }
+
+    struct TestTool;
+
+    #[async_trait::async_trait]
+    impl Tool for TestTool {
+        fn name(&self) -> &str { "test" }
+        fn description(&self) -> &str { "a test tool" }
+        fn input_schema(&self) -> serde_json::Value {
+            serde_json::json!({"type": "object"})
+        }
+        async fn execute(&self, _args: serde_json::Value) -> ToolOutput {
+            ToolOutput::ok("ran")
+        }
+    }
+
+    #[tokio::test]
+    async fn test_tool_trait() {
+        let tool = TestTool;
+        assert_eq!(tool.name(), "test");
+        assert_eq!(tool.description(), "a test tool");
+        let schema = tool.input_schema();
+        assert_eq!(schema["type"], "object");
+        let result = tool.execute(serde_json::json!({})).await;
+        assert_eq!(result.output, "ran");
+    }
+}

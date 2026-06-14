@@ -107,3 +107,43 @@ impl DTraceTool {
         cfg!(target_os = "freebsd")
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_non_freebsd_guard() {
+        let tool = DTraceTool;
+        let result = tool.execute(serde_json::json!({"action": "syscalls"})).await;
+        assert!(!result.success);
+        assert!(result.error.unwrap().contains("only works on FreeBSD"));
+    }
+
+    #[tokio::test]
+    async fn test_dtrace_run_missing_command() {
+        let tool = DTraceTool;
+        let result = tool.execute(serde_json::json!({"action": "run"})).await;
+        assert!(!result.success);
+        if cfg!(target_os = "freebsd") {
+            assert_eq!(result.error.unwrap(), "command is required for 'run' action");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_dtrace_unknown_action() {
+        let tool = DTraceTool;
+        let result = tool.execute(serde_json::json!({"action": "bogus"})).await;
+        assert!(!result.success);
+        if cfg!(target_os = "freebsd") {
+            assert!(result.error.unwrap().contains("Unknown action"));
+        }
+    }
+
+    #[test]
+    fn test_dtrace_input_schema() {
+        let tool = DTraceTool;
+        let schema = tool.input_schema();
+        assert!(schema["required"].as_array().unwrap().iter().any(|v| v == "action"));
+    }
+}

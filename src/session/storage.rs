@@ -167,7 +167,7 @@ mod tests {
 
     #[test]
     fn test_create_and_load_session() {
-        let tmp = std::env::temp_dir().join(format!("aibsd_test_{}.db", std::process::id()));
+        let tmp = std::env::temp_dir().join(format!("aibsd_test_sess_{}.db", std::process::id()));
         let store = SessionStore::new(tmp.to_str().unwrap()).unwrap();
 
         let session_id = "test-session-1";
@@ -189,6 +189,114 @@ mod tests {
 
         let last = store.last_session().unwrap();
         assert_eq!(last, Some(session_id.to_string()));
+
+        let _ = std::fs::remove_file(&tmp);
+    }
+
+    #[test]
+    fn test_no_last_session_when_empty() {
+        let tmp = std::env::temp_dir().join(format!("aibsd_test_empty_{}.db", std::process::id()));
+        let store = SessionStore::new(tmp.to_str().unwrap()).unwrap();
+
+        let last = store.last_session().unwrap();
+        assert_eq!(last, None);
+
+        let _ = std::fs::remove_file(&tmp);
+    }
+
+    #[test]
+    fn test_empty_session_has_no_messages() {
+        let tmp = std::env::temp_dir().join(format!("aibsd_test_empty_msgs_{}.db", std::process::id()));
+        let store = SessionStore::new(tmp.to_str().unwrap()).unwrap();
+
+        let session_id = "empty-session";
+        store.create_session(session_id).unwrap();
+
+        let msgs = store.load_messages(session_id).unwrap();
+        assert!(msgs.is_empty());
+
+        let _ = std::fs::remove_file(&tmp);
+    }
+
+    #[test]
+    fn test_multiple_sessions() {
+        let tmp = std::env::temp_dir().join(format!("aibsd_test_multi_{}.db", std::process::id()));
+        let store = SessionStore::new(tmp.to_str().unwrap()).unwrap();
+
+        store.create_session("sess-1").unwrap();
+        store.create_session("sess-2").unwrap();
+        store.create_session("sess-3").unwrap();
+
+        store.save_message("sess-2", "user", "test").unwrap();
+
+        let sessions = store.list_sessions().unwrap();
+        assert_eq!(sessions.len(), 3);
+
+        // sess-2 should be last (updated_at bumped by save_message)
+        let last = store.last_session().unwrap();
+        assert_eq!(last, Some("sess-2".to_string()));
+
+        let _ = std::fs::remove_file(&tmp);
+    }
+
+    #[test]
+    fn test_session_message_count() {
+        let tmp = std::env::temp_dir().join(format!("aibsd_test_count_{}.db", std::process::id()));
+        let store = SessionStore::new(tmp.to_str().unwrap()).unwrap();
+
+        store.create_session("sess").unwrap();
+        store.save_message("sess", "user", "1").unwrap();
+        store.save_message("sess", "assistant", "2").unwrap();
+        store.save_message("sess", "user", "3").unwrap();
+
+        let sessions = store.list_sessions().unwrap();
+        assert_eq!(sessions[0].message_count, 3);
+
+        let _ = std::fs::remove_file(&tmp);
+    }
+
+    #[test]
+    fn test_update_title() {
+        let tmp = std::env::temp_dir().join(format!("aibsd_test_title_{}.db", std::process::id()));
+        let store = SessionStore::new(tmp.to_str().unwrap()).unwrap();
+
+        store.create_session("sess").unwrap();
+        store.update_title("sess", "My Session").unwrap();
+
+        let sessions = store.list_sessions().unwrap();
+        assert_eq!(sessions[0].title.as_deref(), Some("My Session"));
+
+        let _ = std::fs::remove_file(&tmp);
+    }
+
+    #[test]
+    fn test_delete_session() {
+        let tmp = std::env::temp_dir().join(format!("aibsd_test_del_{}.db", std::process::id()));
+        let store = SessionStore::new(tmp.to_str().unwrap()).unwrap();
+
+        store.create_session("sess").unwrap();
+        store.save_message("sess", "user", "msg").unwrap();
+        store.delete_session("sess").unwrap();
+
+        let sessions = store.list_sessions().unwrap();
+        assert!(sessions.is_empty());
+
+        let last = store.last_session().unwrap();
+        assert_eq!(last, None);
+
+        let _ = std::fs::remove_file(&tmp);
+    }
+
+    #[test]
+    fn test_idempotent_create() {
+        let tmp = std::env::temp_dir().join(format!("aibsd_test_idem_{}.db", std::process::id()));
+        let store = SessionStore::new(tmp.to_str().unwrap()).unwrap();
+
+        store.create_session("sess").unwrap();
+        store.create_session("sess").unwrap(); // should not error (INSERT OR IGNORE)
+
+        let sessions = store.list_sessions().unwrap();
+        assert_eq!(sessions.len(), 1);
 
         let _ = std::fs::remove_file(&tmp);
     }

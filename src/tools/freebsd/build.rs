@@ -133,3 +133,33 @@ impl BuildTool {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_non_freebsd_guard() {
+        let tool = BuildTool;
+        let result = tool.execute(serde_json::json!({"action": "buildworld"})).await;
+        assert!(!result.success);
+        assert!(result.error.unwrap().contains("only works on FreeBSD"));
+    }
+
+    #[tokio::test]
+    async fn test_build_unknown_action() {
+        let tool = BuildTool;
+        let result = tool.execute(serde_json::json!({"action": "bogus"})).await;
+        assert!(!result.success);
+        if cfg!(target_os = "freebsd") {
+            assert!(result.error.unwrap().contains("Unknown action"));
+        }
+    }
+
+    #[test]
+    fn test_build_input_schema() {
+        let tool = BuildTool;
+        let schema = tool.input_schema();
+        assert!(schema["required"].as_array().unwrap().iter().any(|v| v == "action"));
+    }
+}

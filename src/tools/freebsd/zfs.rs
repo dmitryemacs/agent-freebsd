@@ -183,3 +183,34 @@ impl ZfsTool {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tools::Tool;
+
+    #[tokio::test]
+    async fn test_non_freebsd_guard() {
+        let tool = ZfsTool;
+        let result = tool.execute(serde_json::json!({"action": "list"})).await;
+        assert!(!result.success);
+        assert_eq!(result.error.unwrap(), "this tool only works on FreeBSD");
+    }
+
+    #[tokio::test]
+    async fn test_zfs_unknown_action() {
+        let tool = ZfsTool;
+        let result = tool.execute(serde_json::json!({"action": "bogus"})).await;
+        assert!(!result.success);
+        if cfg!(target_os = "freebsd") {
+            assert!(result.error.unwrap().contains("Unknown action"));
+        }
+    }
+
+    #[test]
+    fn test_zfs_input_schema() {
+        let tool = ZfsTool;
+        let schema = tool.input_schema();
+        assert!(schema["required"].as_array().unwrap().iter().any(|v| v == "action"));
+    }
+}

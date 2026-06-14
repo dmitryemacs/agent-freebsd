@@ -48,3 +48,74 @@ impl Tool for WriteTool {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tools::Tool;
+
+    #[tokio::test]
+    async fn test_write_missing_path() {
+        let tool = WriteTool;
+        let result = tool.execute(serde_json::json!({"content": "hello"})).await;
+        assert!(!result.success);
+        assert_eq!(result.error.unwrap(), "path is required");
+    }
+
+    #[tokio::test]
+    async fn test_write_success() {
+        let tmp = std::env::temp_dir().join("aibsd_test_write.txt");
+        let tool = WriteTool;
+        let result = tool.execute(serde_json::json!({
+            "path": tmp.to_str().unwrap(),
+            "content": "hello world"
+        })).await;
+        assert!(result.success);
+        assert!(result.output.contains("Wrote"));
+
+        let content = std::fs::read_to_string(&tmp).unwrap();
+        assert_eq!(content, "hello world");
+
+        let _ = std::fs::remove_file(&tmp);
+    }
+
+    #[tokio::test]
+    async fn test_write_creates_dirs() {
+        let tmp = std::env::temp_dir().join("aibsd_test_nested/sub/file.txt");
+        let tool = WriteTool;
+        let result = tool.execute(serde_json::json!({
+            "path": tmp.to_str().unwrap(),
+            "content": "nested"
+        })).await;
+        assert!(result.success);
+
+        let content = std::fs::read_to_string(&tmp).unwrap();
+        assert_eq!(content, "nested");
+
+        let _ = std::fs::remove_dir_all(tmp.parent().unwrap().parent().unwrap().join("aibsd_test_nested"));
+    }
+
+    #[tokio::test]
+    async fn test_write_empty_content() {
+        let tmp = std::env::temp_dir().join("aibsd_test_write_empty.txt");
+        let tool = WriteTool;
+        let result = tool.execute(serde_json::json!({
+            "path": tmp.to_str().unwrap(),
+            "content": ""
+        })).await;
+        assert!(result.success);
+
+        let content = std::fs::read_to_string(&tmp).unwrap();
+        assert_eq!(content, "");
+
+        let _ = std::fs::remove_file(&tmp);
+    }
+
+    #[test]
+    fn test_write_input_schema() {
+        let tool = WriteTool;
+        let schema = tool.input_schema();
+        assert!(schema["required"].as_array().unwrap().iter().any(|v| v == "path"));
+        assert!(schema["required"].as_array().unwrap().iter().any(|v| v == "content"));
+    }
+}
